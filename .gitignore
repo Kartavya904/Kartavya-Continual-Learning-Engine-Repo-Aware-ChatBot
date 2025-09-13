@@ -1,0 +1,17 @@
+# general
+.DS_Store
+*.log
+.env
+.env.*
+# node
+node_modules/
+.next/
+# python
+__pycache__/
+*.pyc
+.venv/
+# go
+bin/
+dist/
+# docker
+**/.docker/

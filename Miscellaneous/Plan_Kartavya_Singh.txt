@@ -1,0 +1,226 @@
+Plan.txt (Kartavya Singh)
+
+Idea: 
+
+1. Problem: currently most of the AI Chatbots have this issue that they are outdated by a slight amount and have limited knowledge (as compared to what humankind knows) 
+
+2. Thought: What if there is a way to use Python to run a chatbot that is constantly learning and has an endless loop of constant learning from the learning in an endless loop. This will be happening in the backend using the concurrency power of Go, which would make this possible. for hosting we could I don't know we have to plan this part on how we would host such a thing but that's a later thing. But something to be kept in mind. 
+
+The idea is to basically have a chatbot that knows everything from the power that it learns everything in the world. and it is up-to date with what is happening around the world while knowing everything around the world and knowing everything since mankind started. while learning new things with the thoughts it has, and learning from what those thoughts were and just keep learning forever. 
+
+3. Selling Point: We can sell proprietary versions of this software to big companies. 
+
+Solution?
+1) What it is (product)
+
+A web app where you connect a GitHub repo and get a repo-aware chat that:
+
+Answers with file:line citations and code previews.
+
+Stays fresh via diff indexing on pushes/PRs.
+
+When Continual Learning is ON, a background engine “thinks forever” about the repo: mapping risks, hypothesizing bugs, generating/verifying tests, profiling hot spots, and drafting safe PRs—feeding all findings back into chat and the UI.
+
+2) Users & value
+
+Developers/teams: instant codebase understanding, safe auto-insights, fewer regressions.
+
+Leads: living risk map, change summaries, evidence-backed recommendations.
+
+Enterprises: private tenant, optional on-prem, per-repo adapters later.
+
+3) Architecture (Python + Go microservices)
+[Next.js/React/TS] ─► [API Gateway]
+      │
+      ├─► Python “Brain” (FastAPI)
+      │     • Chat (LLM + RAG + citations)
+      │     • Reranker & prompt policy
+      │     • Summarizers, test synthesis
+      │
+      ├─► Go “Thinker” Workers
+      │     • Webhook handler, schedulers
+      │     • Clone/diff, parse, embed
+      │     • Static/dynamic checks, fuzz, bench
+      │     • PR draft (never auto-merge)
+      │
+      └─► Stores
+            • Postgres (+ pgvector)
+            • Object storage (artifacts)
+            • Queue (Redis/NATS)
+
+
+Why this split: Python = LLM/ML ecosystem; Go = high-concurrency indexing/analysis & job orchestration.
+
+4) Data model (key tables)
+
+users, repos, repo_links
+
+files(path, lang, commit, hash)
+
+symbols(name, kind, range, refs_json)
+
+chunks(file_id, start, end, summary, embedding VECTOR)
+
+events(kind, payload_json)
+
+runs(run_id, type, input_json, status, metrics_json, artifact_uri)
+
+facts(scope, key, value_json, source, run_id) ← “function cards,” “module dossiers,” etc.
+
+risks(item, score, features_json)
+
+answers(question, answer, cited_ids[], policy_version)
+
+retrieval_logs(...), feedback(...)
+
+policies(kind, params_json, score, version) ← reranker & prompt policy
+
+5) Indexing & retrieval (baseline “learning”)
+
+Indexer (Go)
+
+Clone/update (shallow), compute diff.
+
+Parse with tree-sitter; chunk by symbol; summarize (Python micro-service).
+
+Embed (code + summary) → pgvector; update symbol/call graph.
+
+Chat (Python)
+
+Hybrid retrieve: semantic (KNN) + symbolic/lexical + recency + history.
+
+Build context (chunks + summaries + graph hops), call LLM.
+
+Return answer + citations (file:line + commit); log retrieval set.
+
+6) Continual Learning (the “never-stop thinking” engine)
+
+Thought = atomic background job with inputs, budget, outputs → persisted artifacts.
+
+Core Thought types:
+
+ScanDiff, MapRepo (graph & coverage of codebase)
+
+SmellHunt (linters, security rules, complexity)
+
+HypothesizeBug (LLM proposes failure modes from diffs/smells/history)
+
+GenTests (unit/property tests), Fuzz (coverage-guided)
+
+Profile (micro-benchmarks on hot paths)
+
+PatchDraft (safe refactors/guards; user-review PR)
+
+Verify (run tests/benchmarks; attach logs)
+
+Summarize (function cards, change digests)
+
+Prioritize (update frontier via bandit/metrics)
+
+Scheduler (Go)
+
+Priority queues per repo + global; goroutine worker pool with work-stealing.
+
+Token-bucket budgets per repo (CPU/GPU minutes, I/O); quiet hours/night mode.
+
+Triggers: webhooks (event-driven) + cadence (cron).
+
+Sandbox dynamic jobs in containers; cancellable contexts; exponential backoff.
+
+What “learning” means
+
+Knowledge growth (no weight changes): embeddings, graphs, “facts” (cards/dossiers), artifacts from tests/fuzz/benchmarks—become durable, queryable context.
+
+Behavioral adaptation (small models, frequent updates):
+
+Retrieval Reranker (logreg/XGBoost/cross-encoder): learns which chunks help; retrain daily.
+
+Prompt/Context Policy (multi-armed bandit): picks #chunks, summaries, graph hops, temperature/system-prompt; per-repo best policy promoted.
+
+Scheduler bandit: allocates Thought types to what pays off (e.g., more fuzzing for parsers).
+
+Optional later: per-repo LoRA adapter (after enough curated Q&A/patches); gated by held-out eval; tenant-scoped.
+
+Risk scoring (guides thinking)
+
+Features: churn, centrality (call-graph PageRank), complexity, coverage gap, smells/security severity, recent diffs, (later) CI/incident signals.
+
+Drives HypothesizeBug, GenTests, Profile targets.
+
+7) Frontend (Next.js + TS + Tailwind + shadcn/ui)
+
+Repos: connect via GitHub OAuth/App; index status; Continuous Learning toggle.
+
+Repo view:
+
+Chat with sources panel (click → code viewer at cited lines).
+
+Learning status: “Indexed 2m ago · 3 thoughts running · 12 queued · Policy v7.”
+
+Insights feed: evidence-backed items (“Semgrep rule X flagged… [Repro] [Draft test]”).
+
+Risk heatmap: tree/file; click → function card (facts, tests, owners).
+
+Runs tab: each run’s logs, coverage, artifacts.
+
+Settings: budgets, quiet hours, allowed tools, PR permissions.
+
+Why this answer?: top retrieval features + policy version; full citations.
+
+8) APIs (minimal contract)
+
+POST /webhooks/github
+
+POST /index/{repo}/initial / POST /index/{repo}/diff
+
+POST /learning/toggle {repo_id, on, budgets}
+
+GET /learning/status?repo_id=...
+
+GET /insights?repo_id=&filter=...
+
+POST /chat {repo_id, question} → {answer, citations, policy_version}
+
+POST /feedback {answer_id, vote, note, correct_citations?}
+
+POST /runs/{run_id}/rerun
+
+9) Tooling
+
+Static: tree-sitter, Semgrep, ESLint/flake8/golangci-lint, mypy/tsc.
+
+Tests: pytest/jest/go test; property tests (Hypothesis/fast-check).
+
+Fuzz: Go fuzz/libFuzzer (where supported).
+
+Perf/Profiling: go bench/pprof, pytest-benchmark, Node prof (opt-in).
+
+LLM/Embeddings: provider-abstracted; start API, swap to self-host later.
+
+10) Security & guardrails
+
+Tenant-scoped data; encrypt at rest; private VPC.
+
+No auto-commits; PR drafts only with explicit user action.
+
+Secret hygiene (never leak code to third-party tools); sandbox execution.
+
+Rate limits, kill-switch, rollbacks for policies/reranker.
+
+11) Implementation roadmap (lean)
+
+Auth + repo connect → initial index → chat with citations.
+
+Webhooks → diff index (freshness).
+
+Continual Learning ON → MapRepo, SmellHunt, Prioritize; insights feed + status.
+
+GenTests/Verify/Fuzz/Profile + artifacts UI.
+
+Nightly reranker & policy training; A/B gate; live “Why this?” UI.
+
+PR draft flow; risk heatmap; function cards.
+
+(Later) per-repo LoRA; CI/incident signals; multi-repo/org mode.
+
+Bottom line: You ship a repo-aware chat that’s transparent (citations), fresh (diff indexing), and adaptive (reranker/policy). Turning on Continual Learning unleashes a budgeted, evidence-driven “thinking engine” that continuously maps, tests, and improves understanding of the codebase—and it proves every claim with artifacts.
