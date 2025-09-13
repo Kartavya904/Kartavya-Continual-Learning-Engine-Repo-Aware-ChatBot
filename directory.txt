@@ -1,0 +1,20 @@
+﻿$sp=$MyInvocation.MyCommand.Path; $header=$MyInvocation.Line; if(-not $header -and $sp){$header=(Get-Content -LiteralPath $sp -TotalCount 1)}; $root=if($sp){Split-Path -Path $sp -Parent}else{(Get-Location).Path}; Push-Location $root; $out=Join-Path $root 'directory.txt'; $ignore=@('.git','.next','node_modules','dist','build','coverage','.turbo','.venv','__pycache__','.mypy_cache','.pytest_cache','.ruff_cache','.idea','.vscode','.DS_Store'); $files=Get-ChildItem -Recurse -File -Force | Where-Object { $rel=$_.FullName.Substring($root.Length+1); if($_.Name -ieq 'directory.txt'){ $false } else { $skip=$false; foreach($pat in $ignore){ if($rel -like "*$pat*"){ $skip=$true; break } }; -not $skip } } | ForEach-Object { $_.FullName.Substring($root.Length+1) -replace '\\','/' } | Sort-Object; @($header,'-------') + $files | Set-Content -Encoding UTF8 -Path $out; Pop-Location
+-------
+.cursorignore
+.cursorrules
+.env
+.env.example
+infra/docker-compose.yml
+Miscellaneous/Plan_Kartavya_Singh.txt
+Miscellaneous/Progress Report.txt
+Miscellaneous/RepoAware_Chat_Continual_Learning_Brief.md
+Miscellaneous/thoguhts.txt
+README.md
+services/brain-python/alembic.ini
+services/brain-python/alembic/env.py
+services/brain-python/alembic/versions/0001_init.py
+services/brain-python/alembic/versions/0002_constraints_indexes.py
+services/brain-python/app/db.py
+services/brain-python/app/main.py
+services/brain-python/Dockerfile
+services/brain-python/pyproject.toml

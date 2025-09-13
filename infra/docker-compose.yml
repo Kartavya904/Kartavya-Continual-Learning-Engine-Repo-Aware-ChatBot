@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER} # no :-dev fallback
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["5432:5432"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  brain:
+    build: ../services/brain-python
+    env_file:
+      - ../.env
+    environment:
+      ALEMBIC_CONFIG: /app/alembic.ini # ← move here (not under postgres)
+    command: sh -lc "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports: ["8000:8000"]
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy

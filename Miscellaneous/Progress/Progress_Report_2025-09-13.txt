@@ -1,0 +1,67 @@
+Progress Report — September 13, 2025
+
+Project: Repo-Aware Chat + Continual Learning Engine
+Repo: Kartavya-Continual-Learning
+Environment: Windows + PowerShell, Docker Desktop
+
+1) High-level Wins
+- FastAPI “brain” service is running in Docker and reachable on :8000 with health checks.
+- Postgres 16 with pgvector is up via docker-compose; pgvector extension installed and verified.
+- Database schema created via Alembic 0001; constraints + HNSW vector index added via 0002.
+- End-to-end path proven: API → DB write (vector) → KNN search returns the inserted chunk.
+
+2) Code & Config Landed
+- services/brain-python/app/db.py
+  • Engine setup with pool_pre_ping + config via DATABASE_URL.
+  • Helpers: probe_db(), schema_health().
+  • Idempotent UPSERTs for repos(owner,name) and files(repo_id,path).
+  • insert_stub_chunk() and insert_chunk_with_vec() write chunks; vectors use vector(1536).
+  • KNN helpers knn_paths() and knn_from_last() using pgvector <->.
+- services/brain-python/app/main.py
+  • Routes: /healthz, /db-healthz, /schema-healthz.
+  • POST /embed-vector (validated length via Pydantic v2 constraints).
+  • DEV helpers: POST /dev/embed-random, GET /dev/search-last.
+  • POST /search (vector body) → KNN results.
+- services/brain-python/alembic.ini + alembic/env.py
+  • script_location configured; engine_from_config uses sqlalchemy. prefix.
+  • Logging sections defined to avoid KeyError.
+- Alembic migrations
+  • 0001_init.py: users, repos, files, chunks; CREATE EXTENSION IF NOT EXISTS vector.
+  • 0002_constraints_indexes.py: de-dup, uniques on (owner,name) + (repo_id,path), HNSW index, helpful secondary indexes.
+- services/brain-python/pyproject.toml
+  • Dependencies: fastapi, uvicorn[standard], sqlalchemy>=2, psycopg[binary]>=3.2, alembic>=1.13, pgvector>=0.2.
+- infra/docker-compose.yml
+  • Runs pgvector/pgvector:pg16 and brain; healthchecks wired; .env overrides supported.
+- Miscellaneous/directory.txt
+  • One-liner PowerShell script to regenerate a filtered repo tree and overwrite itself.
+
+3) What We Verified Today
+- /healthz → OK
+- /db-healthz → PostgreSQL 16.x string returned
+- /schema-healthz → ok: true, vector_ext: true, expected tables present
+- /dev/embed-random → created repo/file/chunk with non-NULL embedding
+- /dev/search-last?k=5 → returned the newest chunk with dist = 0.0
+
+4) Design Decisions Locked In
+- Embedding dimension = 1536 (configurable via EMBED_DIM).
+- Uniqueness: repos(owner,name), files(repo_id,path); inserts are idempotent (UPSERT).
+- Retrieval: pgvector HNSW index on chunks.embedding; distance operator <-> (L2).
+- No secrets in git; .env.example provided; .env ignored.
+
+5) Nice-to-Have Follow-ups (next thin slices)
+- Add /embed-text to compute embeddings server-side (OpenAI or local) and call insert_chunk_with_vec.
+- Return chunk text preview in /search results (join file content later when you ingest code).
+- Start services/thinker-go stub: walk repo, chunk files, call /embed-vector (or /embed-text).
+- Frontend seed (apps/web): tiny search UI hitting /dev/search-last, then /search.
+
+6) Handy Commands (PowerShell)
+- Build + up:  docker compose -f .\infra\docker-compose.yml up -d --build
+- Migrate:     docker compose -f .\infra\docker-compose.yml exec brain alembic upgrade head
+- Health:      irm http://localhost:8000/healthz
+- Embed (dev): Invoke-RestMethod -Uri "http://localhost:8000/dev/embed-random?owner=kart&name=repo&path=services/brain-python/app/db.py&start_line=1&end_line=20" -Method Post
+- KNN (dev):   Invoke-RestMethod -Uri "http://localhost:8000/dev/search-last?k=5" -Method Get
+
+—
+Prepared by: your repo-aware copilot
+
+

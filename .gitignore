@@ -1,17 +1,37 @@
 # general
 .DS_Store
 *.log
+
+# env & secrets
 .env
 .env.*
-# node
-node_modules/
-.next/
-# python
+*.env.local
+
+# Python
 __pycache__/
 *.pyc
 .venv/
-# go
-bin/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Node/Next (future)
+node_modules/
+.next/
 dist/
-# docker
+build/
+coverage/
+.turbo/
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Docker
+**/.pytest_cache/
 **/.docker/
+
+#cursor
+.cursorignore
+.cursorrules
