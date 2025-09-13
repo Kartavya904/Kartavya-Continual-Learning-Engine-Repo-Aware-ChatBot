@@ -1,4 +1,11 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
+
+# Update system packages for security
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY pyproject.toml .
