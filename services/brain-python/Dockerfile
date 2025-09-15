@@ -1,19 +1,17 @@
 FROM python:3.13-slim
 
-# Update system packages for security
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Optional build deps if bcrypt wheels ever fail:
+# RUN apt-get update && apt-get install -y --no-install-recommends build-essential libffi-dev && \
+#     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Install deps from project metadata
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir fastapi "uvicorn[standard]" black ruff \
-    "sqlalchemy>=2.0" "psycopg[binary]>=3.2" "alembic>=1.13" "pgvector>=0.2"
+    pip install --no-cache-dir .
 
-# copy app + alembic
+# Copy app + migrations
 COPY app ./app
 COPY alembic.ini .
 COPY alembic ./alembic
