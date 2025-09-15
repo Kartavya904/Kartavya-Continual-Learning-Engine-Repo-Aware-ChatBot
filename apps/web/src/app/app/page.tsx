@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type User = {
@@ -37,6 +38,12 @@ export default function AppHome() {
           <span className="text-sm text-gray-600">
             {user ? `${user.first_name} ${user.last_name}` : ""}
           </span>
+          <Link
+            href="/app/settings"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Settings
+          </Link>
           <div className="relative">
             <details>
               <summary className="cursor-pointer rounded border px-3 py-1 text-sm">
