@@ -5,11 +5,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+
+from .auth import router as auth_router
 from .db import (
     probe_db, schema_health,
     insert_chunk_with_vec, knn_paths, knn_from_last, EMBED_DIM
 )
-from .auth import router as auth_router
+from .github import router as github_router
 
 app = FastAPI()
 
@@ -77,3 +79,6 @@ def search_last(k: int = 5):
 
 # auth routes
 app.include_router(auth_router)
+
+# github routes
+app.include_router(github_router)

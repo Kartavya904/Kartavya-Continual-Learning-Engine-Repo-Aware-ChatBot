@@ -61,6 +61,7 @@ services/brain-python/alembic/versions/0002_constraints_indexes.py
 services/brain-python/alembic/versions/0003_users_auth_fields.py
 services/brain-python/app/auth.py
 services/brain-python/app/db.py
+services/brain-python/app/github.py
 services/brain-python/app/main.py
 services/brain-python/Dockerfile
 services/brain-python/pyproject.toml

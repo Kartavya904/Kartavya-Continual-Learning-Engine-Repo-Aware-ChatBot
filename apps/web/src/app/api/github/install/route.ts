@@ -1,15 +1,20 @@
-// apps/web/src/app/api/github/install/route.ts
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-// Stub: produce a placeholder target; later, fetch install URL from brain.
 export async function POST(req: Request) {
-  //   const _body =
-  await req.json().catch(() => ({}));
-  const url = "/github/placeholder";
-  return NextResponse.json({ url });
-}
-
-export async function GET() {
-  // Optional convenience for manual testing
-  return NextResponse.json({ url: "/github/placeholder" });
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+  const body = await req.json().catch(() => ({}));
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_BRAIN_URL}/github/install`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    }
+  );
+  return NextResponse.json(await res.json(), { status: res.status });
 }

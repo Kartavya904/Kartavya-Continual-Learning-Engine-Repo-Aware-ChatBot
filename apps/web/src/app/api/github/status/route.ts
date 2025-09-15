@@ -1,7 +1,13 @@
-// apps/web/src/app/api/github/status/route.ts
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-// Stub: replace with real call to brain `/github/me` later.
 export async function GET() {
-  return NextResponse.json({ connected: false });
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+  const res = await fetch(`${process.env.NEXT_PUBLIC_BRAIN_URL}/github/me`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: "no-store",
+  });
+  const json = await res.json();
+  return NextResponse.json(json);
 }
