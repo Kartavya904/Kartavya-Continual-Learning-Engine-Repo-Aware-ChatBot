@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import (
     Session,
     declarative_base,
@@ -198,3 +199,15 @@ def knn_from_last(k: int = 5) -> List[dict]:
             {"k": k},
         ).mappings().all()
     return [dict(r) for r in rows]
+
+async def indexed_paths_for_repo_owner_name(db: AsyncSession, owner: str, name: str) -> set[str]:
+    # If the repo hasn’t been indexed before, this returns empty.
+    sql = text("""
+      SELECT f.path
+      FROM files f
+      JOIN repos r ON r.id = f.repo_id
+      WHERE r.owner = :owner AND r.name = :name
+        AND EXISTS (SELECT 1 FROM chunks c WHERE c.file_id = f.id)
+    """)
+    rows = (await db.execute(sql, {"owner": owner, "name": name})).all()
+    return {row[0] for row in rows}

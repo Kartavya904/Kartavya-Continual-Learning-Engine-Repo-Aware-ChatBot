@@ -23,6 +23,7 @@ apps/web/src/app/api/auth/login/route.ts
 apps/web/src/app/api/auth/logout/route.ts
 apps/web/src/app/api/auth/signup/route.ts
 apps/web/src/app/api/github/callback/route.ts
+apps/web/src/app/api/github/files/route.ts
 apps/web/src/app/api/github/install/route.ts
 apps/web/src/app/api/github/login/route.ts
 apps/web/src/app/api/github/repos/route.ts
@@ -42,6 +43,7 @@ apps/web/src/app/page.tsx
 apps/web/src/components/AuthModal.tsx
 apps/web/src/components/GitHubAccountCard.tsx
 apps/web/src/components/GitHubConnectCard.tsx
+apps/web/src/components/RepoFilesDropdown.tsx
 apps/web/src/components/ui/badge.tsx
 apps/web/src/components/ui/button.tsx
 apps/web/src/components/ui/card.tsx
@@ -55,6 +57,7 @@ apps/web/src/lib/utils.ts
 apps/web/tsconfig.json
 infra/docker-compose.yml
 Miscellaneous/Plan_Kartavya_Singh.txt
+Miscellaneous/Progress/Pictures/files.png
 Miscellaneous/Progress/Pictures/Github OAuth Connection.png
 Miscellaneous/Progress/Pictures/OAuth.png
 Miscellaneous/Progress/Progress_Report_2025-09-13.txt
@@ -68,8 +71,11 @@ services/brain-python/alembic/versions/0002_constraints_indexes.py
 services/brain-python/alembic/versions/0003_users_auth_fields.py
 services/brain-python/alembic/versions/0004_github_accounts.py
 services/brain-python/app/auth.py
+services/brain-python/app/clients/github.py
 services/brain-python/app/db.py
 services/brain-python/app/github.py
 services/brain-python/app/main.py
+services/brain-python/app/repos.py
+services/brain-python/app/schemas.py
 services/brain-python/Dockerfile
 services/brain-python/pyproject.toml

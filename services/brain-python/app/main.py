@@ -18,6 +18,7 @@ from .db import (
 )
 from .auth import router as auth_router
 from .github import router as github_router
+from .repos import router as repos_router
 
 app = FastAPI()
 
@@ -93,3 +94,4 @@ def search_last(k: int = 5):
 # Routers
 app.include_router(auth_router)
 app.include_router(github_router)
+app.include_router(repos_router)

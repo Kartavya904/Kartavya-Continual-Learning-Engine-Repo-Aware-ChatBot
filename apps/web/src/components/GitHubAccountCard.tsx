@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { RepoFilesDropdown } from "@/components/RepoFilesDropdown";
 
 type GhMe = { login: string; name?: string; avatar_url?: string };
 

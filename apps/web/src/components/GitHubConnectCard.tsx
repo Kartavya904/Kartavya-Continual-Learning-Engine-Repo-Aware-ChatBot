@@ -1,13 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { RepoFilesDropdown } from "@/components/RepoFilesDropdown";
 
 type Repo = {
   id: number;
-  full_name: string;
+  full_name: string; // "owner/name"
   private: boolean;
-  visibility: string;
+  visibility: string; // "public" | "private"
   default_branch: string;
-  updated_at: string;
+  updated_at: string; // ISO
   html_url: string;
   owner_login: string;
 };
@@ -16,7 +19,10 @@ export default function GitHubConnectCard() {
   const [status, setStatus] = useState<
     "idle" | "loading" | "connected" | "error"
   >("idle");
-  const [repos, setRepos] = useState<Repo[] | null>(null);
+  const [repos, setRepos] = useState<Repo[]>([]);
+  const [q, setQ] = useState("");
+  const [vis, setVis] = useState<"all" | "public" | "private">("all");
+  const [sort, setSort] = useState<"updated" | "name">("updated");
 
   async function connect() {
     window.location.href = "/api/github/login";
@@ -29,18 +35,35 @@ export default function GitHubConnectCard() {
       setStatus("error");
       return;
     }
-    const data = await r.json();
-    setRepos(data);
+    setRepos(await r.json());
     setStatus("connected");
   }
 
   useEffect(() => {
-    // Try to load repos on mount; if 404, user not connected.
+    // If user is connected, this will succeed; otherwise we stay idle and show the connect button
     loadRepos().catch(() => setStatus("idle"));
   }, []);
 
+  const filtered = useMemo(() => {
+    let list = repos;
+    if (q) {
+      const s = q.toLowerCase();
+      list = list.filter((r) => r.full_name.toLowerCase().includes(s));
+    }
+    if (vis !== "all") {
+      list = list.filter((r) => (vis === "private" ? r.private : !r.private));
+    }
+    list = [...list].sort((a, b) =>
+      sort === "name"
+        ? a.full_name.localeCompare(b.full_name)
+        : b.updated_at.localeCompare(a.updated_at)
+    );
+    return list;
+  }, [repos, q, vis, sort]);
+
   return (
-    <div className="rounded-2xl p-4 border shadow-sm">
+    <div className="rounded-2xl border shadow-sm p-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">GitHub Connection</h3>
@@ -48,16 +71,17 @@ export default function GitHubConnectCard() {
             Connect your GitHub to list repositories and kick off indexing.
           </p>
         </div>
-        {status !== "connected" ? (
+        {status !== "connected" && (
           <button
             onClick={connect}
-            className="px-3 py-2 rounded-xl border text-sm"
+            className="px-3 py-2 rounded-xl border text-sm hover:bg-accent"
           >
             Connect GitHub
           </button>
-        ) : null}
+        )}
       </div>
 
+      {/* Loading/Error/Controls */}
       {status === "loading" && (
         <p className="mt-4 text-sm">Loading your repositories…</p>
       )}
@@ -67,35 +91,79 @@ export default function GitHubConnectCard() {
         </p>
       )}
 
-      {repos && (
-        <div className="mt-4 grid gap-2">
-          {repos.map((r) => (
-            <div
-              key={r.id}
-              className="rounded-xl border p-3 flex items-center justify-between"
+      {status === "connected" && (
+        <>
+          {/* Controls */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search repositories…"
+              className="h-9 w-64 rounded-lg border px-3 text-sm"
+            />
+            <select
+              value={vis}
+              onChange={(e) => setVis(e.target.value as typeof vis)}
+              className="h-9 rounded-lg border px-2 text-sm"
             >
-              <div>
-                <div className="font-medium">{r.full_name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {r.visibility} · branch {r.default_branch} · updated{" "}
-                  {new Date(r.updated_at).toLocaleString()}
-                </div>
+              <option value="all">All</option>
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as typeof sort)}
+              className="h-9 rounded-lg border px-2 text-sm"
+            >
+              <option value="updated">Recently updated</option>
+              <option value="name">Name (A→Z)</option>
+            </select>
+          </div>
+
+          {/* Repo list */}
+          <div className="mt-3 grid gap-2">
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+                No repositories match your filters.
               </div>
-              <div className="flex gap-2">
-                <a
-                  href={r.html_url}
-                  target="_blank"
-                  className="text-sm underline"
+            ) : (
+              filtered.map((r) => (
+                <article
+                  key={r.id}
+                  className="rounded-xl border p-3 hover:bg-muted/40"
                 >
-                  Open
-                </a>
-                <button className="text-sm px-2 py-1 rounded-lg border">
-                  Index now
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  {/* Card header row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{r.full_name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {r.visibility} · branch {r.default_branch} · updated{" "}
+                        {new Date(r.updated_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Link
+                        href={r.html_url}
+                        target="_blank"
+                        className="text-sm underline"
+                      >
+                        Open
+                      </Link>
+                      <button className="text-sm px-2 py-1 rounded-lg border hover:bg-accent">
+                        Index now
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dropdown lives on its own row; no duplicate repo name */}
+                  <div className="mt-2">
+                    <RepoFilesDropdown repo={r} label="Files" />
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   );
