@@ -12,16 +12,19 @@ type User = {
 
 export default function AppHome() {
   const [user, setUser] = useState<User | null>(null);
+  const [ghConnected, setGhConnected] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/me");
-      if (!res.ok) {
+      const me = await fetch("/api/me");
+      if (!me.ok) {
         router.push("/");
         return;
       }
-      setUser(await res.json());
+      setUser(await me.json());
+      const gh = await fetch("/api/github/status", { cache: "no-store" });
+      setGhConnected(gh.ok);
     })();
   }, [router]);
 
@@ -38,6 +41,14 @@ export default function AppHome() {
           <span className="text-sm text-gray-600">
             {user ? `${user.first_name} ${user.last_name}` : ""}
           </span>
+          {ghConnected && (
+            <Link
+              href="/app/github"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              GitHub Lab
+            </Link>
+          )}
           <Link
             href="/app/settings"
             className="text-sm text-muted-foreground hover:text-foreground"

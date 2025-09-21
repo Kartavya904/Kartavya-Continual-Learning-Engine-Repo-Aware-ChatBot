@@ -1,16 +1,22 @@
-import os, random
+from __future__ import annotations
+
+import os
+import random
 from typing import List, Annotated
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-
-from .auth import router as auth_router
 from .db import (
-    probe_db, schema_health,
-    insert_chunk_with_vec, knn_paths, knn_from_last, EMBED_DIM
+    probe_db,
+    schema_health,
+    insert_chunk_with_vec,
+    knn_paths,
+    knn_from_last,
+    EMBED_DIM,
 )
+from .auth import router as auth_router
 from .github import router as github_router
 
 app = FastAPI()
@@ -25,13 +31,16 @@ app.add_middleware(
 )
 
 @app.get("/healthz")
-def healthz(): return {"ok": True}
+def healthz():
+    return {"ok": True}
 
 @app.get("/db-healthz")
-def db_healthz(): return probe_db()
+def db_healthz():
+    return probe_db()
 
 @app.get("/schema-healthz")
-def schema_healthz(): return schema_health()
+def schema_healthz():
+    return schema_health()
 
 Embedding = Annotated[List[float], Field(min_items=EMBED_DIM, max_items=EMBED_DIM)]
 
@@ -47,8 +56,12 @@ class EmbedVecIn(BaseModel):
 def embed_vector(body: EmbedVecIn):
     try:
         ids = insert_chunk_with_vec(
-            owner=body.owner, name=body.name, path=body.path,
-            start_line=body.start_line, end_line=body.end_line, embedding=body.embedding,
+            owner=body.owner,
+            name=body.name,
+            path=body.path,
+            start_line=body.start_line,
+            end_line=body.end_line,
+            embedding=body.embedding,
         )
         return {"ok": True, **ids}
     except ValueError as e:
@@ -77,8 +90,6 @@ def search(body: SearchIn):
 def search_last(k: int = 5):
     return {"results": knn_from_last(k)}
 
-# auth routes
+# Routers
 app.include_router(auth_router)
-
-# github routes
 app.include_router(github_router)

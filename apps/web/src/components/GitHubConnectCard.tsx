@@ -1,120 +1,102 @@
-// apps/web/src/components/GitHubConnectCard.tsx
 "use client";
+import { useEffect, useState } from "react";
 
-import * as React from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Github } from "lucide-react";
-
-type Status = { connected: boolean; username?: string | null };
+type Repo = {
+  id: number;
+  full_name: string;
+  private: boolean;
+  visibility: string;
+  default_branch: string;
+  updated_at: string;
+  html_url: string;
+  owner_login: string;
+};
 
 export default function GitHubConnectCard() {
-  const [loading, setLoading] = React.useState(true);
-  const [connecting, setConnecting] = React.useState(false);
-  const [status, setStatus] = React.useState<Status>({ connected: false });
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "connected" | "error"
+  >("idle");
+  const [repos, setRepos] = useState<Repo[] | null>(null);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/github/status", { cache: "no-store" });
-        const json = (await res.json()) as Status;
-        if (!cancelled) setStatus(json);
-      } catch {
-        // keep default disconnected
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  async function connect() {
+    window.location.href = "/api/github/login";
+  }
+
+  async function loadRepos() {
+    setStatus("loading");
+    const r = await fetch("/api/github/repos", { cache: "no-store" });
+    if (!r.ok) {
+      setStatus("error");
+      return;
+    }
+    const data = await r.json();
+    setRepos(data);
+    setStatus("connected");
+  }
+
+  useEffect(() => {
+    // Try to load repos on mount; if 404, user not connected.
+    loadRepos().catch(() => setStatus("idle"));
   }, []);
 
-  const onConnect = async () => {
-    setConnecting(true);
-    try {
-      const res = await fetch("/api/github/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ next: "/app/github" }),
-      });
-      const json = (await res.json()) as { url: string; next?: string };
-      // For now this is a placeholder; swap with real GitHub App installation URL later.
-      if (json?.url) {
-        // Prefer opening in same tab to keep auth cookie scope simple.
-        window.location.href = json.url;
-        return;
-      }
-      alert("GitHub installation flow coming soon.");
-    } catch {
-      alert("Failed to start GitHub connect. Try again.");
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  const onDisconnect = async () => {
-    alert("Disconnect coming soon.");
-  };
-
   return (
-    <Card className="border-dashed">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+    <div className="rounded-2xl p-4 border shadow-sm">
+      <div className="flex items-center justify-between">
         <div>
-          <CardTitle>GitHub</CardTitle>
-          <CardDescription>
-            Connect your GitHub account to index repos and enable repo-aware
-            chat.
-          </CardDescription>
+          <h3 className="text-lg font-semibold">GitHub Connection</h3>
+          <p className="text-sm text-muted-foreground">
+            Connect your GitHub to list repositories and kick off indexing.
+          </p>
         </div>
-        {loading ? (
-          <Badge variant="secondary" className="gap-1">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking…
-          </Badge>
-        ) : status.connected ? (
-          <Badge className="bg-green-600 hover:bg-green-600">Connected</Badge>
-        ) : (
-          <Badge variant="outline">Not connected</Badge>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          {status.connected
-            ? `Signed in as ${
-                status.username ?? "unknown"
-              }. You can manage installations and choose which repos to index.`
-            : "You’ll be redirected to GitHub to approve access. We only request the minimum needed to list repositories and receive webhooks."}
-        </p>
-      </CardContent>
-      <CardFooter className="flex items-center gap-2">
-        {status.connected ? (
-          <Button
-            variant="outline"
-            onClick={onDisconnect}
-            disabled={connecting}
+        {status !== "connected" ? (
+          <button
+            onClick={connect}
+            className="px-3 py-2 rounded-xl border text-sm"
           >
-            Disconnect
-          </Button>
-        ) : (
-          <Button onClick={onConnect} disabled={connecting}>
-            {connecting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Github className="mr-2 h-4 w-4" />
-            )}
             Connect GitHub
-          </Button>
-        )}
-      </CardFooter>
-    </Card>
+          </button>
+        ) : null}
+      </div>
+
+      {status === "loading" && (
+        <p className="mt-4 text-sm">Loading your repositories…</p>
+      )}
+      {status === "error" && (
+        <p className="mt-4 text-sm text-red-600">
+          Couldn’t load repos. Try reconnecting.
+        </p>
+      )}
+
+      {repos && (
+        <div className="mt-4 grid gap-2">
+          {repos.map((r) => (
+            <div
+              key={r.id}
+              className="rounded-xl border p-3 flex items-center justify-between"
+            >
+              <div>
+                <div className="font-medium">{r.full_name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {r.visibility} · branch {r.default_branch} · updated{" "}
+                  {new Date(r.updated_at).toLocaleString()}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <a
+                  href={r.html_url}
+                  target="_blank"
+                  className="text-sm underline"
+                >
+                  Open
+                </a>
+                <button className="text-sm px-2 py-1 rounded-lg border">
+                  Index now
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

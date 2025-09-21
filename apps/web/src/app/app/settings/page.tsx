@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import GitHubConnectCard from "@/components/GitHubConnectCard";
+import GitHubAccountCard from "../../../components/GitHubAccountCard";
 
 export default function SettingsPage() {
   return (
@@ -62,7 +62,7 @@ export default function SettingsPage() {
                 <div className="text-sm text-muted-foreground">Loading…</div>
               }
             >
-              <GitHubConnectCard />
+              <GitHubAccountCard />
             </Suspense>
           </div>
         </TabsContent>
