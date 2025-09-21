@@ -1,15 +1,13 @@
+// apps/web/src/components/RepoFilesDropdown.tsx
 "use client";
 
 import * as React from "react";
 import { CheckCircle2, Circle, ChevronDown, FolderOpen } from "lucide-react";
 
-type Repo = {
-  id: number; // GitHub numeric id
-  full_name: string; // "owner/name"
-  default_branch?: string;
-};
-
+type Repo = { id: number; full_name: string; default_branch?: string };
 type FileStatus = { path: string; status: "indexed" | "not-indexed" };
+type Counts = { total: number; indexed: number };
+
 type RepoFilesResponse = {
   repo: {
     github_id: number;
@@ -24,20 +22,37 @@ export function RepoFilesDropdown({
   repo,
   label = "Files",
   defaultOpen = false,
+  counts: countsProp,
+  files: filesProp,
 }: {
   repo: Repo;
   label?: string;
   defaultOpen?: boolean;
+  counts?: Counts | null; // controlled from parent
+  files?: FileStatus[] | null; // controlled from parent
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [files, setFiles] = React.useState<FileStatus[] | null>(null);
+  const [counts, setCounts] = React.useState<Counts | null>(countsProp ?? null);
+  const [files, setFiles] = React.useState<FileStatus[] | null>(
+    filesProp ?? null
+  );
   const [q, setQ] = React.useState("");
 
-  const fileCount = files?.length ?? 0;
-  const indexedCount =
-    files?.reduce((n, f) => n + (f.status === "indexed" ? 1 : 0), 0) ?? 0;
+  // keep in sync with parent updates
+  React.useEffect(() => {
+    if (countsProp) setCounts(countsProp);
+  }, [countsProp]);
+  React.useEffect(() => {
+    if (filesProp) setFiles(filesProp);
+  }, [filesProp]);
+
+  const fileCount = counts?.total ?? files?.length ?? 0;
+  const indexedDone =
+    counts?.indexed ??
+    files?.reduce((n, f) => n + (f.status === "indexed" ? 1 : 0), 0) ??
+    0;
 
   async function load() {
     setLoading(true);
@@ -49,8 +64,16 @@ export function RepoFilesDropdown({
       if (!r.ok) throw new Error(`${r.status}`);
       const data: RepoFilesResponse = await r.json();
       setFiles(data.files);
-    } catch (e: any) {
-      setError(`Failed to load files (${e.message ?? "error"})`);
+      if (!countsProp) {
+        const nIdx = data.files.reduce(
+          (n, f) => n + (f.status === "indexed" ? 1 : 0),
+          0
+        );
+        setCounts({ total: data.files.length, indexed: nIdx });
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "error";
+      setError(`Failed to load files (${message})`);
     } finally {
       setLoading(false);
     }
@@ -63,9 +86,8 @@ export function RepoFilesDropdown({
 
   const filtered = React.useMemo(() => {
     if (!files) return [];
-    const needle = q.trim().toLowerCase();
-    if (!needle) return files;
-    return files.filter((f) => f.path.toLowerCase().includes(needle));
+    const s = q.trim().toLowerCase();
+    return s ? files.filter((f) => f.path.toLowerCase().includes(s)) : files;
   }, [files, q]);
 
   return (
@@ -79,11 +101,9 @@ export function RepoFilesDropdown({
         <div className="flex items-center gap-2">
           <FolderOpen className="h-4 w-4" />
           <span className="font-medium">{label}</span>
-          {files && (
-            <span className="text-xs text-muted-foreground">
-              {indexedCount}/{fileCount} indexed
-            </span>
-          )}
+          <span className="text-xs text-muted-foreground">
+            {indexedDone}/{fileCount} indexed
+          </span>
         </div>
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
@@ -93,15 +113,12 @@ export function RepoFilesDropdown({
       {/* Panel */}
       {open && (
         <div className="border-t p-3 space-y-3">
-          {/* Filter + states */}
-          <div className="flex items-center gap-2">
-            <input
-              placeholder="Filter files…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="w-full rounded-md border px-2 py-1 text-sm"
-            />
-          </div>
+          <input
+            placeholder="Filter files…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-full rounded-md border px-2 py-1 text-sm"
+          />
 
           {loading && (
             <div className="text-sm text-muted-foreground">Loading files…</div>

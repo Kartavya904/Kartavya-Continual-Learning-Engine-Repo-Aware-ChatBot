@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const repoId = req.nextUrl.searchParams.get("repoId");
+  const limit = req.nextUrl.searchParams.get("limit") ?? "50";
   if (!repoId)
     return NextResponse.json({ error: "repoId required" }, { status: 400 });
 
@@ -10,10 +11,11 @@ export async function GET(req: NextRequest) {
   const session = cookieStore.get("session")?.value;
 
   const brain = process.env.NEXT_PUBLIC_BRAIN_URL!;
-  const res = await fetch(`${brain}/repos/${repoId}/files`, {
+  const res = await fetch(`${brain}/repos/${repoId}/index?limit=${limit}`, {
+    method: "POST",
     headers: {
-      "Content-Type": "application/json",
       ...(session ? { Authorization: `Bearer ${session}` } : {}),
+      "Content-Type": "application/json",
     },
     cache: "no-store",
   });
