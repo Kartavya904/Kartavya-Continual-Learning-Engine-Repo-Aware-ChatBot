@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { RepoFilesDropdown } from "@/components/RepoFilesDropdown";
-import { RotateCw } from "lucide-react";
+import { RotateCw, X } from "lucide-react";
 
 type Repo = {
   id: number;
@@ -24,8 +24,8 @@ type Prefetched = {
   files?: FileStatus[];
 };
 
-const PREFETCH_FILES_FOR = 3; // eager files for first N repos
-const GLOBAL_REFRESH_MS = 3 * 60_000;
+const PREFETCH_FILES_FOR = 3;
+const GLOBAL_REFRESH_MS = 3 * 180_000;
 
 export default function GitHubConnectCard() {
   const [status, setStatus] = useState<
@@ -37,6 +37,7 @@ export default function GitHubConnectCard() {
   const [sort, setSort] = useState<"updated" | "name">("updated");
   const [prefetched, setPrefetched] = useState<Record<number, Prefetched>>({});
   const [indexingRepoId, setIndexingRepoId] = useState<number | null>(null);
+  const [deletingRepoId, setDeletingRepoId] = useState<number | null>(null);
   const [globRefreshing, setGlobRefreshing] = useState(false);
   const autoRefresher = useRef<NodeJS.Timeout | null>(null);
 
@@ -58,7 +59,7 @@ export default function GitHubConnectCard() {
     setRepos(list);
     setStatus("connected");
 
-    // Prefetch summary for ALL repos (fast counts for UI)
+    // Prefetch summary for ALL repos
     Promise.allSettled(
       list.map((repo) =>
         fetch(`/api/github/files/summary?repoId=${repo.id}`, {
@@ -78,7 +79,7 @@ export default function GitHubConnectCard() {
       )
     );
 
-    // Prefetch full file lists for the first N repos (instant dropdown)
+    // Prefetch full files for the first N
     const top = list.slice(0, PREFETCH_FILES_FOR);
     Promise.allSettled(
       top.map((repo) =>
@@ -91,20 +92,16 @@ export default function GitHubConnectCard() {
               (n, f) => n + (f.status === "indexed" ? 1 : 0),
               0
             );
-            setPrefetched((prev) => {
-              const current = prev[repo.id] || {};
-              return {
-                ...prev,
-                [repo.id]: {
-                  ...current,
-                  counts: current.counts ?? {
-                    total: files.length,
-                    indexed: nIdx,
-                  },
-                  files,
+            setPrefetched((prev) => ({
+              ...prev,
+              [repo.id]: {
+                counts: prev[repo.id]?.counts ?? {
+                  total: files.length,
+                  indexed: nIdx,
                 },
-              };
-            });
+                files,
+              },
+            }));
           })
       )
     );
@@ -114,20 +111,20 @@ export default function GitHubConnectCard() {
     setPrefetched((prev) => {
       const cur = prev[repoId] || {};
       const counts = cur.counts || { total: 0, indexed: 0 };
-      const nextCounts: Counts = {
+      const next: Counts = {
         total: counts.total,
         indexed: Math.max(0, counts.indexed + deltaIndexed),
       };
-      return { ...prev, [repoId]: { ...cur, counts: nextCounts } };
+      return { ...prev, [repoId]: { ...cur, counts: next } };
     });
   }
 
   function markFileIndexed(repoId: number, path: string) {
     setPrefetched((prev) => {
       const cur = prev[repoId] || {};
-      if (!cur.files) return prev; // if not loaded yet, we'll just rely on counts
-      const files: FileStatus[] = cur.files.map((f) =>
-        f.path === path ? { ...f, status: "indexed" as const } : f
+      if (!cur.files) return prev;
+      const files = cur.files.map((f) =>
+        f.path === path ? { ...f, status: "indexed" } : f
       );
       return { ...prev, [repoId]: { ...cur, files } };
     });
@@ -140,9 +137,6 @@ export default function GitHubConnectCard() {
     const es = new EventSource(
       `/api/github/index/stream?repoId=${repoId}&limit=${limit}`
     );
-    es.addEventListener("start", () => {
-      // noop; could set a toast if desired
-    });
     es.addEventListener("file", (ev) => {
       try {
         const data = JSON.parse((ev as MessageEvent).data) as {
@@ -150,18 +144,15 @@ export default function GitHubConnectCard() {
           ok: boolean;
         };
         if (data.ok) {
-          // update counts and any already-visible file rows
           bumpCounts(repoId, 1);
           markFileIndexed(repoId, data.path);
         }
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     });
     es.addEventListener("done", () => {
       es.close();
       setIndexingRepoId(null);
-      // final reconcile in case some events were dropped:
+      // reconcile counts/files from server:
       fetch(`/api/github/files?repoId=${repoId}`, { cache: "no-store" })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
@@ -184,8 +175,58 @@ export default function GitHubConnectCard() {
     };
   }
 
-  // Global refresh for counts (and reconcile top-N files)
-  const refreshAll = useCallback(async () => {
+  // NEW: Unindex button handler
+  async function handleUnindex(repoId: number) {
+    if (indexingRepoId === repoId) return; // safety: disabled in UI
+    const ok = window.confirm(
+      "Delete all embeddings for this repository?\nYou can reindex from scratch after."
+    );
+    if (!ok) return;
+
+    setDeletingRepoId(repoId);
+    try {
+      const r = await fetch(`/api/github/index?repoId=${repoId}`, {
+        method: "DELETE",
+      });
+      if (!r.ok) throw new Error(`delete failed: ${r.status}`);
+
+      // If we know counts, set indexed → 0. Otherwise fetch summary for accurate total.
+      setPrefetched((prev) => {
+        const cur = prev[repoId] || {};
+        const counts = cur.counts
+          ? { total: cur.counts.total, indexed: 0 }
+          : undefined;
+        const files = cur.files
+          ? cur.files.map((f) => ({ ...f, status: "not-indexed" as const }))
+          : undefined;
+        return { ...prev, [repoId]: { counts, files } };
+      });
+
+      // If we didn't have counts, fetch them now so header shows total/0
+      if (!prefetched[repoId]?.counts) {
+        fetch(`/api/github/files/summary?repoId=${repoId}`, {
+          cache: "no-store",
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (!data) return;
+            setPrefetched((prev) => ({
+              ...prev,
+              [repoId]: {
+                ...(prev[repoId] || {}),
+                counts: data.counts as Counts,
+              },
+            }));
+          })
+          .catch(() => void 0);
+      }
+    } finally {
+      setDeletingRepoId(null);
+    }
+  }
+
+  // Global refresh
+  async function refreshAll() {
     if (globRefreshing) return;
     setGlobRefreshing(true);
     try {
@@ -210,7 +251,7 @@ export default function GitHubConnectCard() {
     } finally {
       setGlobRefreshing(false);
     }
-  }, [repos, globRefreshing]);
+  }
 
   useEffect(() => {
     loadRepos().catch(() => setStatus("idle"));
@@ -226,7 +267,7 @@ export default function GitHubConnectCard() {
     return () => {
       if (autoRefresher.current) clearInterval(autoRefresher.current);
     };
-  }, [status, repos.length, refreshAll]);
+  }, [status, repos.length]);
 
   const filtered = useMemo(() => {
     let list = repos;
@@ -255,30 +296,26 @@ export default function GitHubConnectCard() {
             Connect your GitHub to list repositories and kick off indexing.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          {status === "connected" && (
-            <button
-              onClick={() => refreshAll()}
-              disabled={globRefreshing}
-              className="px-3 py-2 rounded-xl border text-sm hover:bg-accent disabled:opacity-60 inline-flex items-center gap-2"
-              title="Refresh counts (auto every 3 min)"
-            >
-              <RotateCw
-                className={`h-4 w-4 ${globRefreshing ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
-          )}
-          {status !== "connected" && (
-            <button
-              onClick={connect}
-              className="px-3 py-2 rounded-xl border text-sm hover:bg-accent"
-            >
-              Connect GitHub
-            </button>
-          )}
-        </div>
+        {status === "connected" ? (
+          <button
+            onClick={() => refreshAll()}
+            disabled={globRefreshing}
+            className="px-3 py-2 rounded-xl border text-sm hover:bg-accent disabled:opacity-60 inline-flex items-center gap-2"
+            title="Refresh counts (auto every 3 min)"
+          >
+            <RotateCw
+              className={`h-4 w-4 ${globRefreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </button>
+        ) : (
+          <button
+            onClick={connect}
+            className="px-3 py-2 rounded-xl border text-sm hover:bg-accent"
+          >
+            Connect GitHub
+          </button>
+        )}
       </div>
 
       {status === "loading" && (
@@ -328,6 +365,8 @@ export default function GitHubConnectCard() {
             ) : (
               filtered.map((r) => {
                 const counts = prefetched[r.id]?.counts;
+                const isIndexing = indexingRepoId === r.id;
+                const isDeleting = deletingRepoId === r.id;
                 return (
                   <article
                     key={r.id}
@@ -360,10 +399,20 @@ export default function GitHubConnectCard() {
                         </Link>
                         <button
                           onClick={() => handleIndexLive(r.id, 50)}
-                          disabled={indexingRepoId === r.id}
+                          disabled={isIndexing || isDeleting}
                           className="text-sm px-2 py-1 rounded-lg border hover:bg-accent disabled:opacity-60"
+                          title="Index (streams live)"
                         >
-                          {indexingRepoId === r.id ? "Indexing…" : "Index now"}
+                          {isIndexing ? "Indexing…" : "Index now"}
+                        </button>
+                        <button
+                          onClick={() => handleUnindex(r.id)}
+                          disabled={isIndexing || isDeleting}
+                          className="text-sm px-2 py-1 rounded-lg border hover:bg-accent disabled:opacity-60 inline-flex items-center gap-1"
+                          title="Delete embeddings (reset)"
+                        >
+                          <X className="h-4 w-4" />
+                          Reset
                         </button>
                       </div>
                     </div>

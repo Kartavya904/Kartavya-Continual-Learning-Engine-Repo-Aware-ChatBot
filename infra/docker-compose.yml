@@ -23,6 +23,7 @@ services:
     build: ../services/brain-python
     working_dir: /app
     env_file:
+      - .env
       - ../.env
     environment:
       ALEMBIC_CONFIG: /app/alembic.ini
